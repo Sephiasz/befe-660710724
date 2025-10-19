@@ -1,22 +1,34 @@
 package main
 
 import (
-	_ "week10-lab3/docs"
-
 	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+
 	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
-
-	"github.com/gin-contrib/cors"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
+
+type ErrorResponse struct {
+	Message string `json:"message"`
+}
+type Book struct {
+	ID        int       `json:"id"`
+	Title     string    `json:"title"`
+	Author    string    `json:"author"`
+	ISBN      string    `json:"isbn"`
+	Year      int       `json:"year"`
+	Price     float64   `json:"price"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
 
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
@@ -28,19 +40,19 @@ func getEnv(key, defaultValue string) string {
 var db *sql.DB
 
 func initDB() {
-
 	var err error
 	host := getEnv("DB_HOST", "localhost")
-	name := getEnv("DB_NAME", "bookstore")
+	port := getEnv("DB_PORT", "5432")
 	user := getEnv("DB_USER", "bookstore_user")
 	password := getEnv("DB_PASSWORD", "your_strong_password")
-	port := getEnv("DB_PORT", "5432")
+	name := getEnv("DB_NAME", "bookstore")
 
-	conSt := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", host, port, user, password, name)
-	// fmt.Println(conSt)
-	db, err = sql.Open("postgres", conSt)
+	conStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		host, port, user, password, name)
+
+	db, err = sql.Open("postgres", conStr)
 	if err != nil {
-		log.Fatal("failed to open database")
+		log.Fatal("Failed to open database:", err)
 	}
 
 	// กำหนดจำนวน Connection สูงสุด
@@ -54,40 +66,22 @@ func initDB() {
 
 	err = db.Ping()
 	if err != nil {
-		fmt.Println(err)
-		log.Fatal("failed to connect database")
+		log.Fatal("Failed to connect to database:", err)
 	}
 
-	log.Println("succesfully connected to database")
-}
-
-type Book struct {
-	ID         int       `json:"id"`
-	Title      string    `json:"title"`
-	Author     string    `json:"author"`
-	ISBN       string    `json:"isbn"`
-	Year       int       `json:"year"`
-	Price      float64   `json:"price"`
-	Created_At time.Time `json:"created_at"`
-	Updated_At time.Time `json:"updated_at"`
-}
-
-type ErrorResponse struct {
-	Message string `json:"message"`
+	log.Println("Connected to the database successfully!")
 }
 
 // @Summary Get all book
-// @Description Get details of book
+// @Description Get details of a books
 // @Tags Books
 // @Produce  json
-// @Success 200  {array}  Book
-// @Failure 404  {object}  ErrorResponse
-// @Router  /books [get]
+// @Success 200  {object}  Book
+// @Failure 500  {object}  ErrorResponse
+// @Router  /books/{id} [get]
 func getAllBooks(c *gin.Context) {
-
 	var rows *sql.Rows
 	var err error
-
 	// ลูกค้าถาม "มีหนังสืออะไรบ้าง"
 	rows, err = db.Query("SELECT id, title, author, isbn, year, price, created_at, updated_at FROM books")
 	if err != nil {
@@ -99,7 +93,7 @@ func getAllBooks(c *gin.Context) {
 	var books []Book
 	for rows.Next() {
 		var book Book
-		err := rows.Scan(&book.ID, &book.Title, &book.Author, &book.ISBN, &book.Year, &book.Price, &book.Created_At, &book.Updated_At)
+		err := rows.Scan(&book.ID, &book.Title, &book.Author, &book.ISBN, &book.Year, &book.Price, &book.CreatedAt, &book.UpdatedAt)
 		if err != nil {
 			// handle error
 		}
@@ -109,29 +103,9 @@ func getAllBooks(c *gin.Context) {
 		books = []Book{}
 	}
 
-	yearQuery := c.Query("year")
-	if yearQuery != "" {
-		filter := []Book{}
-		for _, book := range books {
-			if fmt.Sprint(book.Year) == yearQuery {
-				filter = append(filter, book)
-			}
-		}
-		c.JSON(http.StatusOK, filter)
-		return
-	}
-
 	c.JSON(http.StatusOK, books)
 }
 
-// @Summary Get book by ID
-// @Description Get details of a book by ID
-// @Tags Books
-// @Produce  json
-// @Param   id   path      int     true  "Book ID"
-// @Success 200  {object}  Book
-// @Failure 404  {object}  ErrorResponse
-// @Router  /books/{id} [get]
 func getBook(c *gin.Context) {
 	id := c.Param("id")
 	var book Book
@@ -151,14 +125,6 @@ func getBook(c *gin.Context) {
 	c.JSON(http.StatusOK, book)
 }
 
-// @Summary Create a book by ID
-// @Description Create book details (title, author, isbn, year, price) by book ID
-// @Tags Books
-// @Produce  json
-// @Param   book  body      Book    true   "Create book data"
-// @Success 200  {object}  Book
-// @Failure 404  {object}  ErrorResponse
-// @Router  /books [post]
 func createBook(c *gin.Context) {
 	var newBook Book
 
@@ -169,14 +135,14 @@ func createBook(c *gin.Context) {
 
 	// ใช้ RETURNING เพื่อดึงค่าที่ database generate (id, timestamps)
 	var id int
-	var created_At, updated_At time.Time
+	var createdAt, updatedAt time.Time
 
 	err := db.QueryRow(
 		`INSERT INTO books (title, author, isbn, year, price)
          VALUES ($1, $2, $3, $4, $5)
          RETURNING id, created_at, updated_at`,
 		newBook.Title, newBook.Author, newBook.ISBN, newBook.Year, newBook.Price,
-	).Scan(&id, &created_At, &updated_At)
+	).Scan(&id, &createdAt, &updatedAt)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -184,22 +150,14 @@ func createBook(c *gin.Context) {
 	}
 
 	newBook.ID = id
-	newBook.Created_At = created_At
-	newBook.Updated_At = updated_At
+	newBook.CreatedAt = createdAt
+	newBook.UpdatedAt = updatedAt
 
 	c.JSON(http.StatusCreated, newBook) // ใช้ 201 Created
 }
 
-// @Summary Update a book by ID
-// @Description Update book details (title, author, isbn, year, price) by book ID
-// @Tags Books
-// @Produce  json
-// @Param   id   path      int     true  "Book ID"
-// @Param   book  body      Book    true   "Updated book data"
-// @Success 200  {object}  Book
-// @Failure 404  {object}  ErrorResponse
-// @Router  /books/{id} [put]
 func updateBook(c *gin.Context) {
+	var ID int
 	id := c.Param("id")
 	var updateBook Book
 
@@ -209,7 +167,6 @@ func updateBook(c *gin.Context) {
 	}
 
 	var updatedAt time.Time
-	var return_id int
 	err := db.QueryRow(
 		`UPDATE books
          SET title = $1, author = $2, isbn = $3, year = $4, price = $5
@@ -217,7 +174,7 @@ func updateBook(c *gin.Context) {
          RETURNING id, updated_at`,
 		updateBook.Title, updateBook.Author, updateBook.ISBN,
 		updateBook.Year, updateBook.Price, id,
-	).Scan(&return_id, &updatedAt)
+	).Scan(&ID, &updatedAt)
 
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "book not found"})
@@ -226,19 +183,11 @@ func updateBook(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	updateBook.Updated_At = updatedAt
-	updateBook.ID = return_id
+	updateBook.ID = ID
+	updateBook.UpdatedAt = updatedAt
 	c.JSON(http.StatusOK, updateBook)
 }
 
-// @Summary Delete a book by ID
-// @Description Delete book details by book ID
-// @Tags Books
-// @Produce  json
-// @Param   id   path      int     true  "Book ID"
-// @Success 200  {object}  Book
-// @Failure 404  {object}  ErrorResponse
-// @Router  /books/{id} [delete]
 func deleteBook(c *gin.Context) {
 	id := c.Param("id")
 
@@ -262,24 +211,17 @@ func deleteBook(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "book deleted successfully"})
 }
 
-// @title           Simple API Example
-// @version         1.0
-// @description     This is a simple example of using Gin with Swagger.
-// @host            localhost:8080
-// @BasePath        /api/v1
 func main() {
 	initDB()
 	defer db.Close()
 
 	r := gin.Default()
 	r.Use(cors.Default())
-
 	r.GET("/docs/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-
 	r.GET("/health", func(c *gin.Context) {
 		err := db.Ping()
 		if err != nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"message": "unhealthy", "error": err})
+			c.JSON(http.StatusServiceUnavailable, gin.H{"message": "unheathy", "error": err})
 			return
 		}
 		c.JSON(200, gin.H{"message": "healthy"})
@@ -293,6 +235,5 @@ func main() {
 		api.PUT("/books/:id", updateBook)
 		api.DELETE("/books/:id", deleteBook)
 	}
-
 	r.Run(":8080")
 }
