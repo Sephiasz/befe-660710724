@@ -13,13 +13,13 @@ type ErrorResponse struct {
 
 // @Summary Get book by ID
 // @Description Get details of a book by ID
-// @Tags Book
+// @Tags Books
 // @Produce  json
 // @Param   id   path      int     true  "Book ID"
 // @Success 200  {object}  Book
 // @Failure 404  {object}  ErrorResponse
-// @Router  /Book/{id} [get]
+// @Router  /books/{id} [get]
 func GetBookByID(c *gin.Context) {
 	id := c.Param("id")
-	c.JSON(200, gin.H{"id": id, "tile": "ณัฐโชติ พรหมฤทธิ์"})
+	c.JSON(200, gin.H{"id": id, "title": "mastering golang"})
 }

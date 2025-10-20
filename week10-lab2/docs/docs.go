@@ -15,14 +15,14 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/Book/{id}": {
+        "/books/{id}": {
             "get": {
                 "description": "Get details of a book by ID",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "Book"
+                    "Books"
                 ],
                 "summary": "Get book by ID",
                 "parameters": [

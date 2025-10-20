@@ -19,7 +19,7 @@ info:
   title: Simple API Example
   version: "1.0"
 paths:
-  /Book/{id}:
+  /books/{id}:
     get:
       description: Get details of a book by ID
       parameters:
@@ -41,5 +41,5 @@ paths:
             $ref: '#/definitions/handler.ErrorResponse'
       summary: Get book by ID
       tags:
-      - Book
+      - Books
 swagger: "2.0"

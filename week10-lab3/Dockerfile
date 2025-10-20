@@ -15,7 +15,6 @@ RUN apk --no-cache add ca-certificates curl
 WORKDIR /root
 
 COPY --from=builder /app/main .
-
 COPY --from=builder /app/docs ./docs
 
 ENTRYPOINT ["./main"]

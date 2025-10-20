@@ -9,14 +9,14 @@
     "host": "localhost:9999",
     "basePath": "/api/v1",
     "paths": {
-        "/Book/{id}": {
+        "/books/{id}": {
             "get": {
                 "description": "Get details of a book by ID",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "Book"
+                    "Books"
                 ],
                 "summary": "Get book by ID",
                 "parameters": [
